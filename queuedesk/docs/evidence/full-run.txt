@@ -1,0 +1,104 @@
+
+===== 0. Health check =====
+$ curl -s -w '
+HTTP %{http_code}
+' http://localhost:3000/health
+{"status":"ok"}
+HTTP 200
+
+===== 0b. No token =====
+$ curl -s -w '
+HTTP %{http_code}
+' http://localhost:3000/tickets
+{"error":"unauthorized","message":"missing or invalid bearer token"}
+HTTP 401
+
+===== 0c. Invalid token =====
+$ curl -s -w '
+HTTP %{http_code}
+' http://localhost:3000/tickets -H 'Authorization: Bearer not-a-real-token'
+{"error":"unauthorized","message":"missing or invalid bearer token"}
+HTTP 401
+
+===== 0d. Missing title (bad request) =====
+$ curl -s -w '
+HTTP %{http_code}
+' -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free" -d '{}'
+{"error":"bad_request","message":"title is required"}
+HTTP 400
+
+===== 1. Normal use: Tenant A creates a ticket =====
+$ curl -s -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free" -d '{"title":"Printer jammed",...}'
+{"id":1,"tenantId":"tenantA","title":"Printer jammed","description":"Front desk printer","status":"open","createdAt":"2026-11-19T09:56:25.974Z"}
+
+===== 1. Normal use: Tenant B creates a ticket =====
+$ curl -s -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantB-token-pro" -d '{"title":"Laptop wont boot",...}'
+{"id":2,"tenantId":"tenantB","title":"Laptop wont boot","description":"Customer drop-off","status":"open","createdAt":"2026-11-19T09:56:25.985Z"}
+
+===== 1. Normal use: Tenant A lists tickets (own data only) =====
+$ curl -s http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free"
+{"tenant":"tenantA","plan":"free","tickets":[{"id":1,"tenantId":"tenantA","title":"Printer jammed","description":"Front desk printer","status":"open","createdAt":"2026-11-19T09:56:25.974Z"}]}
+
+===== 1. Normal use: Tenant B lists tickets (own data only) =====
+$ curl -s http://localhost:3000/tickets -H "Authorization: Bearer tenantB-token-pro"
+{"tenant":"tenantB","plan":"pro","tickets":[{"id":2,"tenantId":"tenantB","title":"Laptop wont boot","description":"Customer drop-off","status":"open","createdAt":"2026-11-19T09:56:25.985Z"}]}
+
+===== 2. Tenant isolation: A requests B's ticket (id=2) =====
+$ curl -s -w '
+HTTP %{http_code}
+' http://localhost:3000/tickets/2 -H "Authorization: Bearer tenantA-token-free"
+{"error":"not_found","message":"no ticket with that id for this tenant"}
+HTTP 404
+
+===== 2. Tenant isolation: B still accesses its own ticket (id=2), unchanged =====
+$ curl -s -w '
+HTTP %{http_code}
+' http://localhost:3000/tickets/2 -H "Authorization: Bearer tenantB-token-pro"
+{"id":2,"tenantId":"tenantB","title":"Laptop wont boot","description":"Customer drop-off","status":"open","createdAt":"2026-11-19T09:56:25.985Z"}
+HTTP 200
+
+===== 3. Plan limit: fill Tenant A (free, limit 5) to its allowance =====
+$ curl -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free" -d '{"title":"Issue 2"}'
+{"id":3,"tenantId":"tenantA","title":"Issue 2","description":"","status":"open","createdAt":"2026-11-19T09:56:26.044Z"} -> HTTP 201
+$ curl -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free" -d '{"title":"Issue 3"}'
+{"id":4,"tenantId":"tenantA","title":"Issue 3","description":"","status":"open","createdAt":"2026-11-19T09:56:26.052Z"} -> HTTP 201
+$ curl -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free" -d '{"title":"Issue 4"}'
+{"id":5,"tenantId":"tenantA","title":"Issue 4","description":"","status":"open","createdAt":"2026-11-19T09:56:26.060Z"} -> HTTP 201
+$ curl -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free" -d '{"title":"Issue 5"}'
+{"id":6,"tenantId":"tenantA","title":"Issue 5","description":"","status":"open","createdAt":"2026-11-19T09:56:26.069Z"} -> HTTP 201
+
+===== 3. Plan limit: Tenant A's 6th attempt (over limit) =====
+$ curl -s -w '
+HTTP %{http_code}
+' -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free" -d '{"title":"Issue 6 - should fail"}'
+{"error":"plan_limit_reached","message":"free plan allows at most 5 open tickets; close one before creating another","openCount":5,"limit":5}
+HTTP 403
+
+===== 3. Plan limit: Tenant A open count after rejected attempt (should stay 5) =====
+$ curl -s http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free"
+{"tenant":"tenantA","plan":"free","tickets":[{"id":1,"tenantId":"tenantA","title":"Printer jammed","description":"Front desk printer","status":"open","createdAt":"2026-11-19T09:56:25.974Z"},{"id":3,"tenantId":"tenantA","title":"Issue 2","description":"","status":"open","createdAt":"2026-11-19T09:56:26.044Z"},{"id":4,"tenantId":"tenantA","title":"Issue 3","description":"","status":"open","createdAt":"2026-11-19T09:56:26.052Z"},{"id":5,"tenantId":"tenantA","title":"Issue 4","description":"","status":"open","createdAt":"2026-11-19T09:56:26.060Z"},{"id":6,"tenantId":"tenantA","title":"Issue 5","description":"","status":"open","createdAt":"2026-11-19T09:56:26.069Z"}]}
+
+===== 3. Plan limit: Tenant B (pro, limit 50) creates tickets past count of 5 =====
+$ curl -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantB-token-pro" -d '{"title":"B Issue 2"}'
+{"id":7,"tenantId":"tenantB","title":"B Issue 2","description":"","status":"open","createdAt":"2026-11-19T09:56:26.101Z"} -> HTTP 201
+$ curl -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantB-token-pro" -d '{"title":"B Issue 3"}'
+{"id":8,"tenantId":"tenantB","title":"B Issue 3","description":"","status":"open","createdAt":"2026-11-19T09:56:26.111Z"} -> HTTP 201
+$ curl -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantB-token-pro" -d '{"title":"B Issue 4"}'
+{"id":9,"tenantId":"tenantB","title":"B Issue 4","description":"","status":"open","createdAt":"2026-11-19T09:56:26.121Z"} -> HTTP 201
+$ curl -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantB-token-pro" -d '{"title":"B Issue 5"}'
+{"id":10,"tenantId":"tenantB","title":"B Issue 5","description":"","status":"open","createdAt":"2026-11-19T09:56:26.128Z"} -> HTTP 201
+$ curl -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantB-token-pro" -d '{"title":"B Issue 6"}'
+{"id":11,"tenantId":"tenantB","title":"B Issue 6","description":"","status":"open","createdAt":"2026-11-19T09:56:26.136Z"} -> HTTP 201
+$ curl -s http://localhost:3000/tickets -H "Authorization: Bearer tenantB-token-pro"
+{"tenant":"tenantB","plan":"pro","tickets":[{"id":2,"tenantId":"tenantB","title":"Laptop wont boot","description":"Customer drop-off","status":"open","createdAt":"2026-11-19T09:56:25.985Z"},{"id":7,"tenantId":"tenantB","title":"B Issue 2","description":"","status":"open","createdAt":"2026-11-19T09:56:26.101Z"},{"id":8,"tenantId":"tenantB","title":"B Issue 3","description":"","status":"open","createdAt":"2026-11-19T09:56:26.111Z"},{"id":9,"tenantId":"tenantB","title":"B Issue 4","description":"","status":"open","createdAt":"2026-11-19T09:56:26.121Z"},{"id":10,"tenantId":"tenantB","title":"B Issue 5","description":"","status":"open","createdAt":"2026-11-19T09:56:26.128Z"},{"id":11,"tenantId":"tenantB","title":"B Issue 6","description":"","status":"open","createdAt":"2026-11-19T09:56:26.136Z"}]}
+
+===== 4. Allowance is freed on close: A closes ticket id=1, then can create again =====
+$ curl -s -X PATCH http://localhost:3000/tickets/1/close -H "Authorization: Bearer tenantA-token-free"
+{"id":1,"tenantId":"tenantA","title":"Printer jammed","description":"Front desk printer","status":"closed","createdAt":"2026-11-19T09:56:25.974Z"}
+$ curl -s -w '
+HTTP %{http_code}
+' -X POST http://localhost:3000/tickets -H "Authorization: Bearer tenantA-token-free" -d '{"title":"Issue 7 - should now succeed"}'
+{"id":12,"tenantId":"tenantA","title":"Issue 7 - should now succeed","description":"","status":"open","createdAt":"2026-11-19T09:56:26.162Z"}
+HTTP 201
+
+===== Done =====

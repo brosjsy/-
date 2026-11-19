@@ -5,6 +5,14 @@ required acceptance checks run against it, with actual request/response
 evidence. Source: this repository (`queuedesk/`), `Dockerfile`, `server.js`.
 Design reference: `practical-work-5-design-brief.md`.
 
+This revision re-ran every check end-to-end against a freshly started
+container, plus extra validation beyond the three required checks (missing/
+invalid auth, a bad request, and that closing a ticket frees allowance).
+A full-page screenshot of the live run (captured from a real browser making
+same-origin `fetch()` calls against the running container) is at
+[`evidence/queuedesk-full-run.png`](evidence/queuedesk-full-run.png), and the
+raw curl transcript is at [`evidence/full-run.txt`](evidence/full-run.txt).
+
 ## 1. Build and start
 
 ```
@@ -32,7 +40,19 @@ workflow itself during the checks below.
 | Acme Repairs (`tenantA`) | `tenantA-token-free` | free | 5 |
 | Bolt Electronics (`tenantB`) | `tenantB-token-pro` | pro | 50 |
 
-## 3. Check 1 — Normal use
+## 3. Extra validation (beyond the three required checks)
+
+| Request | Result | Note |
+|---|---|---|
+| `GET /tickets` with no `Authorization` header | `401 unauthorized` | tenant cannot be derived, request rejected |
+| `GET /tickets` with a made-up token | `401 unauthorized` | token must match a real tenant |
+| `POST /tickets` with no `title` | `400 bad_request` | server-side validation |
+| `PATCH /tickets/1/close` then `POST /tickets` again (Tenant A at its limit) | ticket closes (`status:"closed"`), next create returns `201` | confirms the allowance is on **open** tickets, not a lifetime cap |
+
+See the screenshot and `evidence/full-run.txt` for the exact request/response
+pairs.
+
+## 4. Check 1 — Normal use
 
 **Expected:** both tenants complete the workflow (create + list) on their
 own data, each seeing only its own ticket.
@@ -64,7 +84,7 @@ GET /tickets  (Authorization: Bearer tenantB-token-pro)
 **Actual vs expected:** matches. Each tenant's list contains exactly the one
 ticket it created and nothing from the other tenant. **PASS.**
 
-## 4. Check 2 — Tenant isolation
+## 5. Check 2 — Tenant isolation
 
 **Expected:** B creates a record; A's request for it is rejected; B can
 still access it, unchanged.
@@ -86,7 +106,7 @@ GET /tickets/2  (Authorization: Bearer tenantB-token-pro)
 `404` (existence of the record is not revealed), and B's own subsequent
 request for the same record succeeds and is unchanged. **PASS.**
 
-## 5. Check 3 — Plan limit
+## 6. Check 3 — Plan limit
 
 **Expected:** A reaches its allowance, its next attempt fails with no change
 in count, and B succeeds at the higher count.
@@ -120,15 +140,21 @@ rejected with `403 plan_limit_reached` and its open-ticket count stays at 5;
 Tenant B, on the pro plan, succeeds in going past 5 open tickets (the limit
 that bounds the free plan). **PASS.**
 
-## 6. Summary
+## 7. Summary
 
 | Check | Expected | Actual | Result |
 |---|---|---|---|
 | Normal use | Each tenant sees only its own ticket | Confirmed | PASS |
 | Tenant isolation | A is rejected on B's record; B unaffected | Confirmed (`404`, no leak) | PASS |
 | Plan limit | A blocked at 5, count unchanged; B passes 5 | Confirmed (`403`, count stays 5; B reaches 6) | PASS |
+| No / invalid token | `401 unauthorized` | Confirmed on both cases | PASS |
+| Missing required field | `400 bad_request` | Confirmed | PASS |
+| Allowance freed on close | Closing a ticket lets a tenant at its limit create one more | Confirmed (`201` after close) | PASS |
 
-## 7. Changes made during implementation (vs. the Practical Work 5 design)
+All 6 runs above are visible together in
+[`evidence/queuedesk-full-run.png`](evidence/queuedesk-full-run.png).
+
+## 8. Changes made during implementation (vs. the Practical Work 5 design)
 
 - The design brief's `403`/"exists but is not yours" idea for cross-tenant
   access was intentionally implemented as a plain `404` instead, so that a
