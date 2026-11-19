@@ -151,8 +151,10 @@ that bounds the free plan). **PASS.**
 | Missing required field | `400 bad_request` | Confirmed | PASS |
 | Allowance freed on close | Closing a ticket lets a tenant at its limit create one more | Confirmed (`201` after close) | PASS |
 
-All 6 runs above are visible together in
-[`evidence/queuedesk-full-run.png`](evidence/queuedesk-full-run.png).
+All 6 runs above are visible together in the screenshot below
+(full image also at [`evidence/queuedesk-full-run.png`](evidence/queuedesk-full-run.png)):
+
+![Live acceptance run against the running container, showing every request and response](evidence/queuedesk-full-run.png)
 
 ## 8. Changes made during implementation (vs. the Practical Work 5 design)
 
