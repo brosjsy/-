@@ -1,5 +1,6 @@
 'use strict';
 const express = require('express');
+const path = require('path');
 
 // ---------------------------------------------------------------------------
 // Tenant directory (synthetic test data / "test credentials").
@@ -54,11 +55,24 @@ app.use(express.json());
 // Health check (no tenant required).
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+// Static GUI assets (public/) are served without a tenant token; the token
+// is supplied by the browser on each API call made from the page.
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.use(requireTenant);
 
-// List this tenant's own tickets.
+// List this tenant's own tickets, plus its plan allowance so a client can
+// show usage without hardcoding plan limits of its own.
 app.get('/tickets', (req, res) => {
-  res.json({ tenant: req.tenant.id, plan: req.tenant.plan, tickets: ticketsByTenant[req.tenant.id] });
+  const limit = PLANS[req.tenant.plan].openTicketLimit;
+  res.json({
+    tenant: req.tenant.id,
+    tenantName: req.tenant.name,
+    plan: req.tenant.plan,
+    limit,
+    openCount: openTicketCount(req.tenant.id),
+    tickets: ticketsByTenant[req.tenant.id],
+  });
 });
 
 // Create a ticket for this tenant, enforcing the plan's open-ticket allowance.

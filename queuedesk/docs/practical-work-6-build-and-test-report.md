@@ -140,7 +140,50 @@ rejected with `403 plan_limit_reached` and its open-ticket count stays at 5;
 Tenant B, on the pro plan, succeeds in going past 5 open tickets (the limit
 that bounds the free plan). **PASS.**
 
-## 7. Summary
+## 7. Web GUI walkthrough
+
+Beyond the raw API, the app serves a browser GUI at `/` (see `public/`,
+served statically by `server.js`), so the workflow and the tenant/plan
+behaviour can be shown visually, not just via curl. Screenshots below were
+taken with a real browser driving the live container end to end (no mocked
+data) and are saved at `docs/evidence/ui/`.
+
+**Tenant A (free plan), starting empty:**
+
+![Tenant A, free plan, no tickets](evidence/ui/ui-1-empty.png)
+
+**After creating a ticket (usage bar now 1/5):**
+
+![Tenant A after creating a ticket](evidence/ui/ui-2-created.png)
+
+**At the free-plan limit (5/5), attempting a 6th ticket — red usage bar,
+inline error banner from the server's `403 plan_limit_reached`, and the
+create button disabled client-side:**
+
+![Tenant A at plan limit with error banner](evidence/ui/ui-4-limit-reached.png)
+
+**Closing a ticket frees one unit of allowance (back to 4/5, button
+re-enabled):**
+
+![Tenant A after closing a ticket](evidence/ui/ui-5-closed-one.png)
+
+**Switching the tenant selector to Tenant B (pro plan) shows a completely
+separate, empty ticket list — none of Tenant A's 5 tickets are visible,
+demonstrating tenant isolation directly in the UI:**
+
+![Tenant B, pro plan, empty list after switching tenants](evidence/ui/ui-6-tenant-b-empty.png)
+
+**Tenant B goes on to create 7 open tickets — above Tenant A's 5-ticket
+free-plan limit, which does not apply to Tenant B's pro plan:**
+
+![Tenant B with 7 open tickets, above the free-plan limit](evidence/ui/ui-7-tenant-b-many.png)
+
+No console errors were produced during this walkthrough other than the
+browser's own network-tab log of the one intentionally-triggered `403`
+response (the plan-limit rejection); the page's own JavaScript threw no
+errors (`pageerror` listener recorded none).
+
+## 8. Summary
 
 | Check | Expected | Actual | Result |
 |---|---|---|---|
@@ -156,7 +199,7 @@ All 6 runs above are visible together in the screenshot below
 
 ![Live acceptance run against the running container, showing every request and response](evidence/queuedesk-full-run.png)
 
-## 8. Changes made during implementation (vs. the Practical Work 5 design)
+## 9. Changes made during implementation (vs. the Practical Work 5 design)
 
 - The design brief's `403`/"exists but is not yours" idea for cross-tenant
   access was intentionally implemented as a plain `404` instead, so that a
@@ -169,4 +212,12 @@ All 6 runs above are visible together in the screenshot below
   (`ticketsByTenant[tenantId]`) is the same one a real database schema
   (`tickets.tenant_id` with a `WHERE tenant_id = :tenant` filter on every
   query) would enforce.
-- No other functional changes from the design brief.
+- A browser GUI (`public/`, served statically by `server.js`) was added on
+  top of the JSON API described in the design brief, which only specified
+  "a web interface or HTTP API." It is a thin client over the same
+  endpoints and enforces nothing of its own — all isolation and plan-limit
+  logic stays server-side — so it is additive, not a design change.
+- `GET /tickets` was extended to also return `limit` and `openCount`
+  (alongside the existing `tenant` and `plan`), so the GUI's usage bar
+  doesn't have to duplicate the plan table client-side. Non-breaking
+  addition to the same endpoint.

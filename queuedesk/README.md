@@ -12,9 +12,30 @@ Reports:
 
 ## Stack
 
-Node.js 22 + Express, in-memory per-tenant storage (synthetic data, no
-external database needed for this exercise), packaged as a single Docker
-image.
+Node.js 22 + Express, a static browser GUI served from `public/`, in-memory
+per-tenant storage (synthetic data, no external database needed for this
+exercise), packaged as a single Docker image.
+
+## Web GUI
+
+Open `http://localhost:3000/` after starting the container. The page lets
+you pick a tenant from the dropdown (this stands in for logging in — it
+selects which bearer token the browser sends) and shows that tenant's plan,
+open-ticket usage bar, a form to create tickets, and the ticket list with a
+close action. All of it talks to the same JSON API below (open your
+browser's network tab to see the `Authorization: Bearer ...` calls); nothing
+in the browser can request another tenant's data, since the server derives
+the tenant from the token, not from anything the page sends.
+
+| Screen | What it shows |
+|---|---|
+| `docs/evidence/ui/ui-1-empty.png` | Tenant A, free plan, no tickets yet |
+| `docs/evidence/ui/ui-2-created.png` | After creating the first ticket (1/5) |
+| `docs/evidence/ui/ui-3-at-limit.png` | Tenant A at its free-plan limit (5/5) |
+| `docs/evidence/ui/ui-4-limit-reached.png` | Submitting a 6th ticket: red usage bar, error banner, disabled button |
+| `docs/evidence/ui/ui-5-closed-one.png` | Closing a ticket frees one unit of allowance (back to 4/5) |
+| `docs/evidence/ui/ui-6-tenant-b-empty.png` | Switching to Tenant B (pro plan): a completely separate, empty list — tenant isolation in the UI |
+| `docs/evidence/ui/ui-7-tenant-b-many.png` | Tenant B past 7 open tickets, above Tenant A's 5-ticket limit |
 
 ## Test tenants (seeded in `server.js`)
 
@@ -46,7 +67,7 @@ or body can select a different tenant.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/tickets` | List the caller's tenant's tickets |
+| GET | `/tickets` | List the caller's tenant's tickets, plus its plan, `limit`, and current `openCount` (used by the GUI's usage bar) |
 | POST | `/tickets` | Create a ticket for the caller's tenant (`{title, description}`); rejected with `403 plan_limit_reached` once the plan's open-ticket allowance is hit |
 | GET | `/tickets/:id` | Fetch one ticket; `404` if it does not belong to the caller's tenant |
 | PATCH | `/tickets/:id/close` | Close one of the caller's tenant's tickets, freeing one unit of allowance |
