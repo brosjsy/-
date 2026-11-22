@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QueueDesk</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">QueueDesk</div>
+    <div class="tenant-switch">
+      <label for="tenant-select">Signed in as</label>
+      <select id="tenant-select">
+        <option value="tenantA-token-free">Acme Repairs — Free plan</option>
+        <option value="tenantB-token-pro">Bolt Electronics — Pro plan</option>
+      </select>
+    </div>
+  </header>
+
+  <main>
+    <section class="status-card">
+      <div>
+        <div class="status-label">Tenant</div>
+        <div id="status-tenant" class="status-value">—</div>
+      </div>
+      <div>
+        <div class="status-label">Plan</div>
+        <div id="status-plan" class="status-value">—</div>
+      </div>
+      <div>
+        <div class="status-label">Open tickets</div>
+        <div id="status-usage" class="status-value">—</div>
+        <div class="usage-bar"><div id="usage-fill" class="usage-fill"></div></div>
+      </div>
+    </section>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <section class="panel">
+      <h2>New ticket</h2>
+      <form id="create-form">
+        <input id="title" type="text" placeholder="Title (required)" required />
+        <input id="description" type="text" placeholder="Description (optional)" />
+        <button type="submit">Create ticket</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Tickets</h2>
+      <div id="tickets" class="tickets"></div>
+      <p id="empty-state" class="empty-state" hidden>No tickets yet — create one above.</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
